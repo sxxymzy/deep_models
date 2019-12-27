@@ -30,8 +30,9 @@ class MobileNetV1():
     def __init__(self, scale=1.0):
         self.scale = scale
 
-    def net(self, input, class_dim=1000):
+    def net(self, input, class_dim=1000, output_all_layers=False):
         scale = self.scale
+        layers = []
         # conv1: 112x112
         input = self.conv_bn_layer(
             input,
@@ -41,6 +42,7 @@ class MobileNetV1():
             stride=2,
             padding=1,
             name="conv1")
+        layers.append(input)
 
         # 56x56
         input = self.depthwise_separable(
@@ -51,6 +53,7 @@ class MobileNetV1():
             stride=1,
             scale=scale,
             name="conv2_1")
+        layers.append(input)
 
         input = self.depthwise_separable(
             input,
@@ -60,6 +63,7 @@ class MobileNetV1():
             stride=2,
             scale=scale,
             name="conv2_2")
+        layers.append(input)
 
         # 28x28
         input = self.depthwise_separable(
@@ -70,6 +74,7 @@ class MobileNetV1():
             stride=1,
             scale=scale,
             name="conv3_1")
+        layers.append(input)
 
         input = self.depthwise_separable(
             input,
@@ -79,6 +84,7 @@ class MobileNetV1():
             stride=2,
             scale=scale,
             name="conv3_2")
+        layers.append(input)
 
         # 14x14
         input = self.depthwise_separable(
@@ -89,6 +95,7 @@ class MobileNetV1():
             stride=1,
             scale=scale,
             name="conv4_1")
+        layers.append(input)
 
         input = self.depthwise_separable(
             input,
@@ -98,6 +105,7 @@ class MobileNetV1():
             stride=2,
             scale=scale,
             name="conv4_2")
+        layers.append(input)
 
         # 14x14
         for i in range(5):
@@ -109,6 +117,7 @@ class MobileNetV1():
                 stride=1,
                 scale=scale,
                 name="conv5" + "_" + str(i + 1))
+            layers.append(input)
         # 7x7
         input = self.depthwise_separable(
             input,
@@ -118,6 +127,7 @@ class MobileNetV1():
             stride=2,
             scale=scale,
             name="conv5_6")
+        layers.append(input)
 
         input = self.depthwise_separable(
             input,
@@ -127,16 +137,23 @@ class MobileNetV1():
             stride=1,
             scale=scale,
             name="conv6")
+        layers.append(input)
 
         input = fluid.layers.pool2d(
             input=input, pool_type='avg', global_pooling=True)
+        layers.append(input)
 
         output = fluid.layers.fc(input=input,
                                  size=class_dim,
                                  param_attr=ParamAttr(
                                      initializer=MSRA(), name="fc7_weights"),
                                  bias_attr=ParamAttr(name="fc7_offset"))
-        return output
+        layers.append(output)
+        if output_all_layers:
+            return layers
+        else:
+            return output
+
 
     def conv_bn_layer(self,
                       input,
