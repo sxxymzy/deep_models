@@ -31,8 +31,9 @@ class ResNet():
     def __init__(self, layers=50):
         self.layers = layers
 
-    def net(self, input, class_dim=1000):
+    def net(self, input, class_dim=1000, output_all_layers=False):
         layers = self.layers
+        all_layers = []
         supported_layers = [18, 34, 50, 101, 152]
         assert layers in supported_layers, \
             "supported layers are {} but input layer is {}".format(supported_layers, layers)
@@ -54,12 +55,14 @@ class ResNet():
             stride=2,
             act='relu',
             name="conv1")
+        all_layers.append(conv)
         conv = fluid.layers.pool2d(
             input=conv,
             pool_size=3,
             pool_stride=2,
             pool_padding=1,
             pool_type='max')
+        all_layers.append(conv)
         if layers >= 50:
             for block in range(len(depth)):
                 for i in range(depth[block]):
@@ -75,15 +78,18 @@ class ResNet():
                         num_filters=num_filters[block],
                         stride=2 if i == 0 and block != 0 else 1,
                         name=conv_name)
+                    all_layers.append(conv)
 
             pool = fluid.layers.pool2d(
                 input=conv, pool_type='avg', global_pooling=True)
+            all_layers.append(pool)
             stdv = 1.0 / math.sqrt(pool.shape[1] * 1.0)
             out = fluid.layers.fc(
                 input=pool,
                 size=class_dim,
                 param_attr=fluid.param_attr.ParamAttr(
                     initializer=fluid.initializer.Uniform(-stdv, stdv)))
+            all_layers.append(out)
         else:
             for block in range(len(depth)):
                 for i in range(depth[block]):
@@ -94,16 +100,22 @@ class ResNet():
                         stride=2 if i == 0 and block != 0 else 1,
                         is_first=block == i == 0,
                         name=conv_name)
+                    all_layers.append(conv)
 
             pool = fluid.layers.pool2d(
                 input=conv, pool_type='avg', global_pooling=True)
+            all_layers.append(pool)
             stdv = 1.0 / math.sqrt(pool.shape[1] * 1.0)
             out = fluid.layers.fc(
                 input=pool,
                 size=class_dim,
                 param_attr=fluid.param_attr.ParamAttr(
                     initializer=fluid.initializer.Uniform(-stdv, stdv)))
-        return out
+            all_layers.append(out)
+        if output_all_layers:
+            return all_layers
+        else:
+            return out
 
     def conv_bn_layer(self,
                       input,
