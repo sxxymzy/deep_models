@@ -30,7 +30,8 @@ class DenseNet():
     def __init__(self, layers=121):
         self.layers = layers
 
-    def net(self, input, bn_size=4, dropout=0, class_dim=1000):
+    def net(self, input, bn_size=4, dropout=0, class_dim=1000, output_all_layers=True):
+        all_layers = []
         layers = self.layers
         supported_layers = [121, 161, 169, 201, 264]
         assert layers in supported_layers, \
@@ -53,6 +54,7 @@ class DenseNet():
             act=None,
             param_attr=ParamAttr(name="conv1_weights"),
             bias_attr=False)
+        all_layers.append(conv)
         conv = fluid.layers.batch_norm(
             input=conv,
             act='relu',
@@ -60,12 +62,14 @@ class DenseNet():
             bias_attr=ParamAttr(name='conv1_bn_offset'),
             moving_mean_name='conv1_bn_mean',
             moving_variance_name='conv1_bn_variance')
+        all_layers.append(conv)
         conv = fluid.layers.pool2d(
             input=conv,
             pool_size=3,
             pool_stride=2,
             pool_padding=1,
             pool_type='max')
+        all_layers.append(conv)
         num_features = num_init_features
         for i, num_layers in enumerate(block_config):
             conv = self.make_dense_block(
@@ -75,10 +79,12 @@ class DenseNet():
                 growth_rate,
                 dropout,
                 name='conv' + str(i + 2))
+            all_layers.append(conv)
             num_features = num_features + num_layers * growth_rate
             if i != len(block_config) - 1:
                 conv = self.make_transition(
                     conv, num_features // 2, name='conv' + str(i + 2) + '_blk')
+                all_layers.append(conv)
                 num_features = num_features // 2
         conv = fluid.layers.batch_norm(
             input=conv,
@@ -87,8 +93,10 @@ class DenseNet():
             bias_attr=ParamAttr(name='conv5_blk_bn_offset'),
             moving_mean_name='conv5_blk_bn_mean',
             moving_variance_name='conv5_blk_bn_variance')
+        all_layers.append(conv)
         conv = fluid.layers.pool2d(
             input=conv, pool_type='avg', global_pooling=True)
+        all_layers.append(conv)
         stdv = 1.0 / math.sqrt(conv.shape[1] * 1.0)
         out = fluid.layers.fc(
             input=conv,
@@ -97,7 +105,11 @@ class DenseNet():
                 initializer=fluid.initializer.Uniform(-stdv, stdv),
                 name="fc_weights"),
             bias_attr=ParamAttr(name='fc_offset'))
-        return out
+        all_layers.append(out)
+        if output_all_layers:
+            return all_layers
+        else:
+            return out
 
     def make_transition(self, input, num_output_features, name=None):
         bn_ac = fluid.layers.batch_norm(
