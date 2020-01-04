@@ -1,16 +1,16 @@
-#copyright (c) 2019 PaddlePaddle Authors. All Rights Reserve.
+# copyright (c) 2019 PaddlePaddle Authors. All Rights Reserve.
 #
-#Licensed under the Apache License, Version 2.0 (the "License");
-#you may not use this file except in compliance with the License.
-#You may obtain a copy of the License at
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
 #    http://www.apache.org/licenses/LICENSE-2.0
 #
-#Unless required by applicable law or agreed to in writing, software
-#distributed under the License is distributed on an "AS IS" BASIS,
-#WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#See the License for the specific language governing permissions and
-#limitations under the License.
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from __future__ import absolute_import
 from __future__ import division
@@ -28,17 +28,21 @@ __all__ = ['Xception', 'Xception41', 'Xception65', 'Xception71']
 class Xception(object):
     """Xception"""
 
+    all_layers = []  # actually only returned layers in exit_flow
+
     def __init__(self, entry_flow_block_num=3, middle_flow_block_num=8):
         self.entry_flow_block_num = entry_flow_block_num
         self.middle_flow_block_num = middle_flow_block_num
         return
 
-    def net(self, input, class_dim=1000):
+    def net(self, input, class_dim=1000, output_all_layers=False):
         conv = self.entry_flow(input, self.entry_flow_block_num)
         conv = self.middle_flow(conv, self.middle_flow_block_num)
         conv = self.exit_flow(conv, class_dim)
-
-        return conv
+        if output_all_layers:
+            return self.all_layers
+        else:
+            return conv
 
     def entry_flow(self, input, block_num=3):
         '''xception entry_flow'''
@@ -159,17 +163,21 @@ class Xception(object):
         num_filters2 = 1024
         conv0 = self.exit_flow_bottleneck_block(
             input, num_filters1, num_filters2, name=name + "_1")
+        self.all_layers.append(conv0)
 
         conv1 = self.separable_conv(
             conv0, num_filters=1536, stride=1, name=name + "_2")
         conv1 = fluid.layers.relu(conv1)
+        self.all_layers.append(conv1)
 
         conv2 = self.separable_conv(
             conv1, num_filters=2048, stride=1, name=name + "_3")
         conv2 = fluid.layers.relu(conv2)
+        self.all_layers.append(conv2)
 
         pool = fluid.layers.pool2d(
             input=conv2, pool_type='avg', global_pooling=True)
+        self.all_layers.append(pool)
 
         stdv = 1.0 / math.sqrt(pool.shape[1] * 1.0)
         out = fluid.layers.fc(
@@ -179,6 +187,7 @@ class Xception(object):
                 name='fc_weights',
                 initializer=fluid.initializer.Uniform(-stdv, stdv)),
             bias_attr=fluid.param_attr.ParamAttr(name='fc_offset'))
+        self.all_layers.append(out)
 
         return out
 
