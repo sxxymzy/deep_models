@@ -30,7 +30,8 @@ class SE_ResNet_vd():
         self.layers = layers
         self.is_3x3 = is_3x3
 
-    def net(self, input, class_dim=1000):
+    def net(self, input, class_dim=1000, output_all_layers=False):
+        all_layers = []
         is_3x3 = self.is_3x3
         layers = self.layers
         supported_layers = [18, 34, 50, 101, 152, 200]
@@ -52,13 +53,17 @@ class SE_ResNet_vd():
         if is_3x3 == False:
             conv = self.conv_bn_layer(
                 input=input, num_filters=64, filter_size=7, stride=2, act='relu')
+            all_layers.append(conv)
         else:
             conv = self.conv_bn_layer(
                 input=input, num_filters=32, filter_size=3, stride=2, act='relu', name='conv1_1')
+            all_layers.append(conv)
             conv = self.conv_bn_layer(
                 input=conv, num_filters=32, filter_size=3, stride=1, act='relu', name='conv1_2')
+            all_layers.append(conv)
             conv = self.conv_bn_layer(
                 input=conv, num_filters=64, filter_size=3, stride=1, act='relu', name='conv1_3')
+            all_layers.append(conv)
 
         conv = fluid.layers.pool2d(
             input=conv,
@@ -66,6 +71,7 @@ class SE_ResNet_vd():
             pool_stride=2,
             pool_padding=1,
             pool_type='max')
+        all_layers.append(conv)
         if layers >= 50:
             for block in range(len(depth)):
                 for i in range(depth[block]):
@@ -83,6 +89,7 @@ class SE_ResNet_vd():
                         if_first=block==i==0, 
                         reduction_ratio=reduction_ratio,
                         name=conv_name)
+                    all_layers.append(conv)
 
         else:
             for block in range(len(depth)):
@@ -95,10 +102,11 @@ class SE_ResNet_vd():
                         if_first=block==i==0,
                         reduction_ratio=reduction_ratio,
                         name=conv_name)
+                    all_layers.append(conv)
 
         pool = fluid.layers.pool2d(
             input=conv, pool_size=7, pool_type='avg', global_pooling=True)
-
+        all_layers.append(pool)
 
         stdv = 1.0 / math.sqrt(pool.shape[1] * 1.0)
         out = fluid.layers.fc(input=pool,
@@ -106,8 +114,12 @@ class SE_ResNet_vd():
                               param_attr=fluid.param_attr.ParamAttr(
                                   initializer=fluid.initializer.Uniform(-stdv, stdv), name='fc6_weights'),
                               bias_attr=ParamAttr(name='fc6_offset'))
-        
-        return out
+        all_layers.append(pool)
+
+        if output_all_layers:
+            return all_layers
+        else:
+            return out
     
     
         
