@@ -32,8 +32,9 @@ class DPN(object):
     def __init__(self, layers=68):
         self.layers = layers
 
-    def net(self, input, class_dim=1000):
+    def net(self, input, class_dim=1000, output_all_layers=False):
         # get network args
+        all_layers = []
         args = self.get_net_args(self.layers)
         bws = args['bw']
         inc_sec = args['inc_sec']
@@ -69,6 +70,7 @@ class DPN(object):
             bias_attr=ParamAttr('conv1_bn_offset'),
             moving_mean_name='conv1_bn_mean',
             moving_variance_name='conv1_bn_variance', )
+        all_layers.append(conv1_x_1)
 
         convX_x_x = fluid.layers.pool2d(
             input=conv1_x_1,
@@ -77,6 +79,7 @@ class DPN(object):
             pool_padding=1,
             pool_type='max',
             name="pool1")
+        all_layers.append(convX_x_x)
 
         #conv2 - conv5
         match_list, num = [], 0
@@ -113,20 +116,25 @@ class DPN(object):
             bias_attr=ParamAttr('final_concat_bn_offset'),
             moving_mean_name='final_concat_bn_mean',
             moving_variance_name='final_concat_bn_variance', )
+        all_layers.append(conv5_x_x)
         pool5 = fluid.layers.pool2d(
             input=conv5_x_x,
             pool_size=7,
             pool_stride=1,
             pool_padding=0,
             pool_type='avg', )
+        all_layers.append(pool5)
 
         stdv = 0.01
         fc6 = fluid.layers.fc(input=pool5,
                               size=class_dim,
                               param_attr=ParamAttr(initializer=fluid.initializer.Uniform(-stdv, stdv), name='fc_weights'),
                               bias_attr=ParamAttr(name='fc_offset'))
-
-        return fc6
+        all_layers.append(fc6)
+        if output_all_layers:
+            return all_layers
+        else:
+            return fc6
 
     def get_net_args(self, layers):
         if layers == 68:
